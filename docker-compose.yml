@@ -6,8 +6,6 @@ services:
     volumes:
       - ./data/queue:/data
     command: redis-server --appendonly yes --auto-aof-rewrite-min-size 64mb --auto-aof-rewrite-percentage 10
-    networks:
-      - lan    
   bot:
     build: .
     links:
@@ -16,7 +14,7 @@ services:
       - 127.0.0.1:8080:8080
     user: "${UID}:${GID}"
     env_file:
-      - ./environment
+      - ./.env
     volumes:
       - ./data/cache:/app/run/.cache
       - ./data/simple-index:/app/run/simple-index
@@ -24,26 +22,13 @@ services:
     command: python -m oca_github_bot
     depends_on:
       - queue
-    networks:
-      - lan   
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      #Router
-      - "traefik.http.routers.route_bot.rule=Host(`github-bot.simetri-sinergi.xyz`)"
-      - "traefik.http.routers.route_bot.entrypoints=https"
-      - "traefik.http.routers.route_bot.tls.certresolver=myresolver"
-      - "traefik.http.routers.route_bot.tls=true"
-      - "traefik.http.routers.route_bot.service=service_bot"
-      #Service
-      - "traefik.http.services.service_bot.loadbalancer.server.port=8080"        
   worker:
     build: .
     links:
       - queue
     user: "${UID}:${GID}"
     env_file:
-      - ./environment
+      - ./.env
     volumes:
       - ./data/cache:/app/run/.cache
       - ./data/simple-index:/app/run/simple-index
@@ -51,15 +36,13 @@ services:
     command: celery --app=oca_github_bot.queue.app worker --concurrency=2 --loglevel=INFO
     depends_on:
       - queue
-    networks:
-      - lan        
   beat:
     build: .
     links:
       - queue
     user: "${UID}:${GID}"
     env_file:
-      - ./environment
+      - ./.env
     volumes:
       - ./data/cache:/app/run/.cache
       - ./data/simple-index:/app/run/simple-index
@@ -67,37 +50,16 @@ services:
     command: celery --app=oca_github_bot.queue.app beat
     depends_on:
       - queue
-    networks:
-      - lan        
   monitor:
     build: .
     links:
       - queue
-    # ports:
-    #   - 5555:5555
+    ports:
+      - 127.0.0.1:5555:5555
     user: "${UID}:${GID}"
     env_file:
-      - ./environment
+      - ./.env
     restart: unless-stopped
     command: celery --app=oca_github_bot.queue.app flower
     depends_on:
       - queue
-    networks:
-      - lan
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      #Router
-      - "traefik.http.routers.route_monitor.rule=Host(`gh-bot-monitor.simetri-sinergi.xyz`)"
-      - "traefik.http.routers.route_monitor.entrypoints=https"
-      - "traefik.http.routers.route_monitor.tls.certresolver=myresolver"
-      - "traefik.http.routers.route_monitor.tls=true"
-      - "traefik.http.routers.route_monitor.service=service_monitor"
-      #Service
-      - "traefik.http.services.service_monitor.loadbalancer.server.port=5555"          
-
-networks:
-  lan:
-  traefik:
-    external:
-      name: traefik_proxy        
